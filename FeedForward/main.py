@@ -5,6 +5,7 @@ import utils.utils as utils
 from neural_nets import transform_net, vgg
 import matplotlib.pyplot as plt
 import numpy as np
+from PIL import Image
 
 
 def train(training_imgs_path: str, style_image_path: str, img_size: int, training_args: Dict[str, Union[float, int]], model_name: str, device: torch.device):
@@ -82,7 +83,8 @@ def stylize_image(content_image_name, model_name, device: torch.device):
 
     with torch.no_grad():
         stylized_image = transformer_net(content_image).cpu()
-        utils.save_image(stylized_image[0], "test.jpg")
+        stylized_image = utils.post_process_image(stylized_image.to('cpu').numpy()[0])
+        utils.save_image(stylized_image, "test.jpg")
 
 
 if __name__ == "__main__":
@@ -92,11 +94,11 @@ if __name__ == "__main__":
     MODEL_NAME = "coco200"
 
     TRAINING_ARGS = {
-        "learning_rate": 1e-5,
+        "learning_rate": 1e-4,
         "batch_size": 2,
         "epochs": 2,
         "content_w": 1e0,
-        "style_w": 1e4
+        "style_w": 1e5
     }
 
     IMG_SIZE = 512
@@ -105,8 +107,4 @@ if __name__ == "__main__":
     print(device)
 
     train(training_imgs_path=TRAINING_IMGS_PATH, style_image_path=STYLE_IMG_PATH, training_args=TRAINING_ARGS, img_size=IMG_SIZE, model_name=MODEL_NAME, device=device)
-    # stylize_image("amber.jpg", MODEL_NAME, device=device)
-
-    #img = utils.prepare_image("./images/style_images/mosaic.jpg")
-    #img.show()
-    #utils.save_image(img, "./images/output/asd.jpg")
+    stylize_image("amber.jpg", MODEL_NAME, device=device)

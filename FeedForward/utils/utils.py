@@ -1,5 +1,4 @@
 import os
-
 import numpy as np
 import torch
 import torchvision.utils
@@ -48,7 +47,7 @@ def prepare_image(img_path: str, img_size: int = None):
 #     return (batch - mean) / std
 
 
-def gram_matrix(x):
+def gram_matrix(x: torch.Tensor):
     (b, ch, h, w) = x.size()
     features = x.view(b, ch, w * h)
     features_t = features.transpose(1, 2)
@@ -61,14 +60,15 @@ def save_model(transformer_net: ImageTransformNet, file_name: str):
     torch.save(transformer_net.state_dict(), f'models/{file_name}.model')
 
 
-def post_process_image(img):
+def post_process_image(img: np.ndarray):
     mean = np.array([0.485, 0.456, 0.406]).reshape(-1, 1, 1)
     std = np.array([0.229, 0.224, 0.225]).reshape(-1, 1, 1)
     dump_img = (img * std) + mean  # de-normalize
     dump_img = (np.clip(dump_img, 0., 1.) * 255).astype(np.uint8)
-    dump_img = np.moveaxis(dump_img, 0, 2)
+    dump_img = dump_img.transpose(1, 2, 0)
     return dump_img
 
-def save_image(img, path):
-    img = img.clone()
-    torchvision.utils.save_image(img, f'./images/output/{path}')
+
+def save_image(img: np.ndarray, path: str):
+    img = Image.fromarray(img)
+    img.save(f'./images/output/{path}')
