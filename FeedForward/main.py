@@ -1,6 +1,7 @@
 from typing import Dict, Union
 import os
 import time
+import math
 import torch
 from torch.optim import Adam
 import utils.utils as utils
@@ -23,10 +24,10 @@ def train(training_imgs_path: str, style_image_path: str, img_size: int, trainin
     image_loader = utils.get_data_loader(folder_path=training_imgs_path, transformer=img_transformer, batch_size=training_args["batch_size"])
 
     # training loop
-    start = time.time()
     total_losses = []
     content_losses = []
     style_losses = []
+    start = time.time()
     for _ in range(training_args["epochs"]):
         for i, (batch, _) in enumerate(image_loader):
 
@@ -83,7 +84,7 @@ def stylize_image(content_image_path: str, model_path: str, output_image_path: s
 
 if __name__ == "__main__":
 
-    TRAINING_MODE = False   # Biramo jel hocemo i trening ili samo transofrmaciju slika vec postojecim modelom
+    TRAINING_MODE = True   # Biramo jel hocemo i trening ili samo transofrmaciju slika vec postojecim modelom
 
     STYLE_IMGS_PATH = "images/style_images"
     CONTENT_IMGS_PATH = "images/content_images"
@@ -114,7 +115,7 @@ if __name__ == "__main__":
 
         IMG_SIZE = 512
 
-        MODEL_NAME = f'st_{STYLE_IMG_NAME.split(".")[0]}_tr_{DATASET_NAME}'
+        MODEL_NAME = f'st_{STYLE_IMG_NAME.split(".")[0]}_tr_{DATASET_NAME}_{str(math.floor(time.time()))}'
         MODEL_PATH = os.path.join(MODELS_PATH, MODEL_NAME)
         os.makedirs(MODEL_PATH, exist_ok=True)
 
