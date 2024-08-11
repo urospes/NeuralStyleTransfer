@@ -1,14 +1,13 @@
 from typing import Dict, Union
+import os
+import time
 import torch
 from torch.optim import Adam
 import utils.utils as utils
 from neural_nets import transform_net, vgg
-import matplotlib.pyplot as plt
-import numpy as np
-from PIL import Image
 
 
-def train(training_imgs_path: str, style_image_path: str, img_size: int, training_args: Dict[str, Union[float, int]], model_name: str, device: torch.device):
+def train(training_imgs_path: str, style_image_path: str, img_size: int, training_args: Dict[str, Union[float, int]], model_path: str, device: torch.device):
 
     transformer_net = transform_net.ImageTransformNet().train().to(device)
     loss_net = vgg.Vgg16().to(device)
@@ -24,6 +23,7 @@ def train(training_imgs_path: str, style_image_path: str, img_size: int, trainin
     image_loader = utils.get_data_loader(folder_path=training_imgs_path, transformer=img_transformer, batch_size=training_args["batch_size"])
 
     # training loop
+    start = time.time()
     total_losses = []
     content_losses = []
     style_losses = []
@@ -57,54 +57,78 @@ def train(training_imgs_path: str, style_image_path: str, img_size: int, trainin
                 print(f'Batch {i}')
                 print(f'Total loss: {total_loss} |||||| Content loss: {content_loss} |||||| Style loss: {style_loss}')
 
-    utils.save_model(transformer_net.eval().cpu(), model_name)
+    torch.save(transformer_net.state_dict(), os.path.join(model_path, "params.model"))
 
-    plot_loss(total_losses, "total")
-    plot_loss(content_losses, "content")
-    plot_loss(style_losses, "style")
+    end = time.time()
 
-
-def plot_loss(losses, type):
-    plt.figure()
-    plt.plot(np.arange(1, len(losses) + 1), losses)
-    plt.title(type)
-    plt.savefig(f'./loss_graphs/{type}')
+    utils.save_training_info(training_args=training_args, training_time=end-start, total_losses=total_losses,
+                             content_losses=content_losses, style_losses=style_losses, model_path=model_path)
 
 
-def stylize_image(content_image_name, model_name, device: torch.device):
+def stylize_image(content_image_path: str, model_path: str, output_image_path: str, device: torch.device):
 
-    content_image = utils.prepare_image(f'images/content_images/{content_image_name}')
+    content_image = utils.prepare_image(content_image_path)
     content_image = content_image.unsqueeze(0).to(device)
 
     transformer_net = transform_net.ImageTransformNet()
-    state_dict = torch.load(f'models/{model_name}.model')
+    state_dict = torch.load(model_path)
     transformer_net.load_state_dict(state_dict, strict=True)
     transformer_net.to(device).eval()
 
     with torch.no_grad():
-        stylized_image = transformer_net(content_image).cpu()
-        stylized_image = utils.post_process_image(stylized_image.to('cpu').numpy()[0])
-        utils.save_image(stylized_image, "test.jpg")
+        stylized_image = transformer_net(content_image)
+        stylized_image = utils.post_process_image(stylized_image.cpu().numpy()[0])
+        utils.save_image(stylized_image, output_image_path)
 
 
 if __name__ == "__main__":
 
-    TRAINING_IMGS_PATH = "./images/training/ms_coco_200"
-    STYLE_IMG_PATH = "./images/style_images/mosaic.jpg"
-    MODEL_NAME = "coco200"
+    TRAINING_MODE = False   # Biramo jel hocemo i trening ili samo transofrmaciju slika vec postojecim modelom
 
-    TRAINING_ARGS = {
-        "learning_rate": 1e-4,
-        "batch_size": 2,
-        "epochs": 2,
-        "content_w": 1e0,
-        "style_w": 1e5
-    }
-
-    IMG_SIZE = 512
+    STYLE_IMGS_PATH = "images/style_images"
+    CONTENT_IMGS_PATH = "images/content_images"
+    OUTPUT_IMGS_PATH = "images/output_images"
+    MODELS_PATH = "models"
+    utils.mkdirs(dirs=(STYLE_IMGS_PATH, CONTENT_IMGS_PATH, OUTPUT_IMGS_PATH, MODELS_PATH))
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(device)
 
-    train(training_imgs_path=TRAINING_IMGS_PATH, style_image_path=STYLE_IMG_PATH, training_args=TRAINING_ARGS, img_size=IMG_SIZE, model_name=MODEL_NAME, device=device)
-    stylize_image("amber.jpg", MODEL_NAME, device=device)
+    if TRAINING_MODE:
+        STYLE_IMG_NAME = "mosaic.jpg"
+        TRAINING_IMGS = "images/training"
+        DATASET_NAME = "ms_coco_200"    # promeni dataset po zelji
+
+        TRAINING_IMGS_PATH = os.path.join(TRAINING_IMGS, DATASET_NAME)
+        STYLE_IMG_PATH = os.path.join(STYLE_IMGS_PATH, STYLE_IMG_NAME)
+
+        #   trening parametri (najcesce je potrebnno eksperimentisati sa LR, CW i SW) batch size probati sto veci moguci
+        #   broj epoha neka ostane na 2
+        TRAINING_ARGS = {
+            "learning_rate": 1e-4,
+            "batch_size": 2,
+            "epochs": 1,
+            "content_w": 1e0,
+            "style_w": 1e4
+        }
+
+        IMG_SIZE = 512
+
+        MODEL_NAME = f'st_{STYLE_IMG_NAME.split(".")[0]}_tr_{DATASET_NAME}'
+        MODEL_PATH = os.path.join(MODELS_PATH, MODEL_NAME)
+        os.makedirs(MODEL_PATH, exist_ok=True)
+
+        train(training_imgs_path=TRAINING_IMGS_PATH, style_image_path=STYLE_IMG_PATH,
+              training_args=TRAINING_ARGS, img_size=IMG_SIZE, model_path=MODEL_PATH, device=device)
+
+    else:
+        CONTENT_IMAGE_NAME = "amber.jpg"    # ovim parametrom navodimo koju sliku zelimo da stilizujemo
+        MODEL_NAME = "coco10k_model"    # navodimo ime vec istreniranog modela, konfigurisati po zelji
+
+        OUTPUT_IMG_NAME = f'c_{CONTENT_IMAGE_NAME.split(".")[0]}_m_{MODEL_NAME.split(".")[0]}.jpg'
+
+        MODEL_PATH = os.path.join(MODELS_PATH, MODEL_NAME, "params.model")
+        CONTENT_IMG_PATH = os.path.join(CONTENT_IMGS_PATH, CONTENT_IMAGE_NAME)
+        OUTPUT_IMG_PATH = os.path.join(OUTPUT_IMGS_PATH, OUTPUT_IMG_NAME)
+
+        stylize_image(CONTENT_IMG_PATH, MODEL_PATH, OUTPUT_IMG_PATH, device=device)

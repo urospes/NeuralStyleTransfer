@@ -1,11 +1,12 @@
 import os
+import json
+from typing import Tuple, List, Dict, Union
 import numpy as np
 import torch
-import torchvision.utils
 from PIL import Image
-from neural_nets.transform_net import ImageTransformNet
 from torch.utils.data import DataLoader
 from torchvision import transforms, datasets
+import matplotlib.pyplot as plt
 
 
 def get_training_transformer(img_size: int) -> transforms.Compose:
@@ -23,14 +24,14 @@ def get_data_loader(folder_path: str, transformer: transforms.Compose, batch_siz
     return DataLoader(dataset=image_folder, batch_size=batch_size)
 
 
-def load_image(img_path: str, img_size: int = None):
+def load_image(img_path: str, img_size: int = None) -> Image:
     img = Image.open(img_path)
     if img_size:
         img = img.resize((img_size, img_size), resample=Image.Resampling.LANCZOS)
     return img
 
 
-def prepare_image(img_path: str, img_size: int = None):
+def prepare_image(img_path: str, img_size: int = None) -> torch.Tensor:
     img = load_image(img_path=img_path, img_size=img_size)
     transformer = transforms.Compose([
         transforms.ToTensor(),
@@ -47,7 +48,7 @@ def prepare_image(img_path: str, img_size: int = None):
 #     return (batch - mean) / std
 
 
-def gram_matrix(x: torch.Tensor):
+def gram_matrix(x: torch.Tensor) -> torch.Tensor:
     (b, ch, h, w) = x.size()
     features = x.view(b, ch, w * h)
     features_t = features.transpose(1, 2)
@@ -55,12 +56,7 @@ def gram_matrix(x: torch.Tensor):
     return gram
 
 
-def save_model(transformer_net: ImageTransformNet, file_name: str):
-    os.makedirs("models/", exist_ok=True)
-    torch.save(transformer_net.state_dict(), f'models/{file_name}.model')
-
-
-def post_process_image(img: np.ndarray):
+def post_process_image(img: np.ndarray) -> np.ndarray:
     mean = np.array([0.485, 0.456, 0.406]).reshape(-1, 1, 1)
     std = np.array([0.229, 0.224, 0.225]).reshape(-1, 1, 1)
     dump_img = (img * std) + mean  # de-normalize
@@ -69,6 +65,34 @@ def post_process_image(img: np.ndarray):
     return dump_img
 
 
-def save_image(img: np.ndarray, path: str):
+def save_image(img: np.ndarray, path: str) -> None:
     img = Image.fromarray(img)
-    img.save(f'./images/output/{path}')
+    img.save(path)
+
+
+def plot_loss(losses: List[float], path: str, loss_type: str):
+    graphs_path = os.path.join(path, "loss_graphs")
+    os.makedirs(graphs_path, exist_ok=True)
+    plt.figure()
+    plt.plot(np.arange(1, len(losses) + 1), losses)
+    plt.title(loss_type)
+    plt.savefig(os.path.join(graphs_path, loss_type))
+
+
+def save_training_info(training_args: Dict[str, Union[float, int]], training_time: float, total_losses: List[float],
+                       content_losses: List[float], style_losses: List[float], model_path: str):
+    training_info = {
+        **training_args,
+        "training_time": training_time
+    }
+    with open(os.path.join(model_path, "training_info.json"), 'w') as f:
+        json.dump(training_info, f)
+
+    plot_loss(losses=total_losses, path=model_path, loss_type="Total Loss")
+    plot_loss(losses=content_losses, path=model_path, loss_type="Content Loss")
+    plot_loss(losses=style_losses, path=model_path, loss_type="Style Loss")
+
+
+def mkdirs(dirs: Tuple[str, ...]) -> None:
+    for dir in dirs:
+        os.makedirs(dir, exist_ok=True)
