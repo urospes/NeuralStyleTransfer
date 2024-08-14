@@ -56,6 +56,12 @@ def gram_matrix(x: torch.Tensor) -> torch.Tensor:
     return gram
 
 
+def total_variation(img_batch: torch.Tensor) -> float:
+    batch_size = img_batch.shape[0]
+    return (torch.sum(torch.abs(img_batch[:, :, :, :-1] - img_batch[:, :, :, 1:])) +
+            torch.sum(torch.abs(img_batch[:, :, :-1, :] - img_batch[:, :, 1:, :]))) / batch_size
+
+
 def post_process_image(img: np.ndarray) -> np.ndarray:
     mean = np.array([0.485, 0.456, 0.406]).reshape(-1, 1, 1)
     std = np.array([0.229, 0.224, 0.225]).reshape(-1, 1, 1)
@@ -80,7 +86,7 @@ def plot_loss(losses: List[float], path: str, loss_type: str):
 
 
 def save_training_info(training_args: Dict[str, Union[float, int]], training_time: float, total_losses: List[float],
-                       content_losses: List[float], style_losses: List[float], model_path: str):
+                       content_losses: List[float], style_losses: List[float], tv_losses: List[float], model_path: str):
     training_info = {
         **training_args,
         "training_time": training_time
@@ -91,6 +97,7 @@ def save_training_info(training_args: Dict[str, Union[float, int]], training_tim
     plot_loss(losses=total_losses, path=model_path, loss_type="Total Loss")
     plot_loss(losses=content_losses, path=model_path, loss_type="Content Loss")
     plot_loss(losses=style_losses, path=model_path, loss_type="Style Loss")
+    plot_loss(losses=tv_losses, path=model_path, loss_type="Total variation Loss")
 
 
 def mkdirs(dirs: Tuple[str, ...]) -> None:

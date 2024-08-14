@@ -6,6 +6,7 @@ import torch
 from torch.optim import Adam
 import utils.utils as utils
 from neural_nets import transform_net, vgg
+from torch.utils.tensorboard import SummaryWriter
 
 
 def train(training_imgs_path: str, style_image_path: str, img_size: int, training_args: Dict[str, Union[float, int]], model_path: str, device: torch.device):
@@ -13,6 +14,7 @@ def train(training_imgs_path: str, style_image_path: str, img_size: int, trainin
     transformer_net = transform_net.ImageTransformNet().train().to(device)
     loss_net = vgg.Vgg16().to(device)
     optimizer = Adam(params=transformer_net.parameters(), lr=training_args["learning_rate"])
+    #scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, factor=0.1, mode="min", patience=20)
 
     style_img = utils.prepare_image(style_image_path, img_size=img_size)
     style_img = style_img.repeat(training_args["batch_size"], 1, 1, 1).to(device)
@@ -27,9 +29,12 @@ def train(training_imgs_path: str, style_image_path: str, img_size: int, trainin
     total_losses = []
     content_losses = []
     style_losses = []
+    tv_losses = []
+    writer = SummaryWriter()
+
     start = time.time()
-    for _ in range(training_args["epochs"]):
-        for i, (batch, _) in enumerate(image_loader):
+    for i in range(training_args["epochs"]):
+        for batch_id, (batch, _) in enumerate(image_loader):
 
             batch = batch.to(device)
             stylized_batch = transformer_net(batch)
@@ -45,25 +50,34 @@ def train(training_imgs_path: str, style_image_path: str, img_size: int, trainin
                 style_loss += torch.nn.MSELoss()(gram_target, gram_current)
             style_loss = training_args["style_w"] * style_loss
 
-            total_loss = content_loss + style_loss  # total variation loss should be added
+            tv_loss = training_args["tv_w"] * utils.total_variation(stylized_batch)
+
+            total_loss = content_loss + style_loss + tv_loss
             total_loss.backward()
             optimizer.step()
+            #scheduler.step(total_loss)
             optimizer.zero_grad()
+
+            writer.add_scalar('Loss/content-loss', content_loss.item(), len(image_loader) * i + batch_id + 1)
+            writer.add_scalar('Loss/style-loss', style_loss.item(), len(image_loader) * i + batch_id + 1)
+            writer.add_scalar('Loss/tv-loss', tv_loss.item(), len(image_loader) * i + batch_id + 1)
+            writer.add_scalar('Loss/Total-loss', total_loss.item(), len(image_loader) * i + batch_id + 1)
 
             total_losses.append(total_loss.item())
             content_losses.append(content_loss.item())
             style_losses.append(style_loss.item())
+            tv_losses.append(tv_loss.item())
 
-            if i % 20 == 0:
-                print(f'Batch {i}')
-                print(f'Total loss: {total_loss} |||||| Content loss: {content_loss} |||||| Style loss: {style_loss}')
+            if batch_id % 20 == 0:
+                print(f'Batch {batch_id}')
+                print(f'Total loss: {total_loss} |||||| Content loss: {content_loss} |||||| Style loss: {style_loss} |||||| TV Loss: {tv_loss}')
 
-    torch.save(transformer_net.state_dict(), os.path.join(model_path, "params.model"))
+    torch.save(transformer_net.state_dict(), os.path.join(model_path, "params.pth"))
 
     end = time.time()
-
+    writer.close()
     utils.save_training_info(training_args=training_args, training_time=end-start, total_losses=total_losses,
-                             content_losses=content_losses, style_losses=style_losses, model_path=model_path)
+                             content_losses=content_losses, style_losses=style_losses, tv_losses=tv_losses, model_path=model_path)
 
 
 def stylize_image(content_image_path: str, model_path: str, output_image_path: str, device: torch.device):
@@ -84,7 +98,7 @@ def stylize_image(content_image_path: str, model_path: str, output_image_path: s
 
 if __name__ == "__main__":
 
-    TRAINING_MODE = True   # Biramo jel hocemo i trening ili samo transofrmaciju slika vec postojecim modelom
+    TRAINING_MODE = False    # Biramo jel hocemo i trening ili samo transofrmaciju slika vec postojecim modelom
 
     STYLE_IMGS_PATH = "images/style_images"
     CONTENT_IMGS_PATH = "images/content_images"
@@ -98,7 +112,7 @@ if __name__ == "__main__":
     if TRAINING_MODE:
         STYLE_IMG_NAME = "mosaic.jpg"
         TRAINING_IMGS = "images/training"
-        DATASET_NAME = "ms_coco_200"    # promeni dataset po zelji
+        DATASET_NAME = "ms_coco_10k"    # promeni dataset po zelji
 
         TRAINING_IMGS_PATH = os.path.join(TRAINING_IMGS, DATASET_NAME)
         STYLE_IMG_PATH = os.path.join(STYLE_IMGS_PATH, STYLE_IMG_NAME)
@@ -107,13 +121,14 @@ if __name__ == "__main__":
         #   broj epoha neka ostane na 2
         TRAINING_ARGS = {
             "learning_rate": 1e-4,
-            "batch_size": 2,
-            "epochs": 1,
-            "content_w": 1e0,
-            "style_w": 1e4
+            "batch_size": 4,
+            "epochs": 2,
+            "content_w": 1e1,
+            "style_w": 5e3,
+            "tv_w": 0
         }
 
-        IMG_SIZE = 512
+        IMG_SIZE = 256
 
         MODEL_NAME = f'st_{STYLE_IMG_NAME.split(".")[0]}_tr_{DATASET_NAME}_{str(math.floor(time.time()))}'
         MODEL_PATH = os.path.join(MODELS_PATH, MODEL_NAME)
@@ -124,11 +139,11 @@ if __name__ == "__main__":
 
     else:
         CONTENT_IMAGE_NAME = "amber.jpg"    # ovim parametrom navodimo koju sliku zelimo da stilizujemo
-        MODEL_NAME = "coco10k_model"    # navodimo ime vec istreniranog modela, konfigurisati po zelji
+        MODEL_NAME = "st_mosaic_tr_ms_coco_10k_1723571031"    # navodimo ime vec istreniranog modela, konfigurisati po zelji
 
         OUTPUT_IMG_NAME = f'c_{CONTENT_IMAGE_NAME.split(".")[0]}_m_{MODEL_NAME.split(".")[0]}.jpg'
 
-        MODEL_PATH = os.path.join(MODELS_PATH, MODEL_NAME, "params.model")
+        MODEL_PATH = os.path.join(MODELS_PATH, MODEL_NAME, "params.pth")
         CONTENT_IMG_PATH = os.path.join(CONTENT_IMGS_PATH, CONTENT_IMAGE_NAME)
         OUTPUT_IMG_PATH = os.path.join(OUTPUT_IMGS_PATH, OUTPUT_IMG_NAME)
 
