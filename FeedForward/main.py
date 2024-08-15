@@ -14,7 +14,6 @@ def train(training_imgs_path: str, style_image_path: str, img_size: int, trainin
     transformer_net = transform_net.ImageTransformNet().train().to(device)
     loss_net = vgg.Vgg16().to(device)
     optimizer = Adam(params=transformer_net.parameters(), lr=training_args["learning_rate"])
-    #scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, factor=0.1, mode="min", patience=20)
 
     style_img = utils.prepare_image(style_image_path, img_size=img_size)
     style_img = style_img.repeat(training_args["batch_size"], 1, 1, 1).to(device)
@@ -55,7 +54,6 @@ def train(training_imgs_path: str, style_image_path: str, img_size: int, trainin
             total_loss = content_loss + style_loss + tv_loss
             total_loss.backward()
             optimizer.step()
-            #scheduler.step(total_loss)
             optimizer.zero_grad()
 
             writer.add_scalar('Loss/content-loss', content_loss.item(), len(image_loader) * i + batch_id + 1)
@@ -110,9 +108,9 @@ if __name__ == "__main__":
     print(device)
 
     if TRAINING_MODE:
-        STYLE_IMG_NAME = "mosaic.jpg"
+        STYLE_IMG_NAME = "starry_night.jpg"
         TRAINING_IMGS = "images/training"
-        DATASET_NAME = "ms_coco_10k"    # promeni dataset po zelji
+        DATASET_NAME = "ms_coco_40k"    # promeni dataset po zelji
 
         TRAINING_IMGS_PATH = os.path.join(TRAINING_IMGS, DATASET_NAME)
         STYLE_IMG_PATH = os.path.join(STYLE_IMGS_PATH, STYLE_IMG_NAME)
@@ -120,11 +118,11 @@ if __name__ == "__main__":
         #   trening parametri (najcesce je potrebnno eksperimentisati sa LR, CW i SW) batch size probati sto veci moguci
         #   broj epoha neka ostane na 2
         TRAINING_ARGS = {
-            "learning_rate": 1e-4,
+            "learning_rate": 3e-4,
             "batch_size": 4,
             "epochs": 2,
-            "content_w": 1e1,
-            "style_w": 5e3,
+            "content_w": 1e0,
+            "style_w": 5e4,
             "tv_w": 0
         }
 
@@ -138,8 +136,8 @@ if __name__ == "__main__":
               training_args=TRAINING_ARGS, img_size=IMG_SIZE, model_path=MODEL_PATH, device=device)
 
     else:
-        CONTENT_IMAGE_NAME = "amber.jpg"    # ovim parametrom navodimo koju sliku zelimo da stilizujemo
-        MODEL_NAME = "st_mosaic_tr_ms_coco_10k_1723571031"    # navodimo ime vec istreniranog modela, konfigurisati po zelji
+        CONTENT_IMAGE_NAME = "figures.jpg"    # ovim parametrom navodimo koju sliku zelimo da stilizujemo
+        MODEL_NAME = "st_starry_night_tr_ms_coco_40k_1723738077"    # navodimo ime vec istreniranog modela, konfigurisati po zelji
 
         OUTPUT_IMG_NAME = f'c_{CONTENT_IMAGE_NAME.split(".")[0]}_m_{MODEL_NAME.split(".")[0]}.jpg'
 

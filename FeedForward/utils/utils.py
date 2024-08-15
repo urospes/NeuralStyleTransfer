@@ -14,6 +14,7 @@ def get_training_transformer(img_size: int) -> transforms.Compose:
         transforms.Resize(size=img_size),
         transforms.CenterCrop(size=img_size),
         transforms.ToTensor(),
+        transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
         #transforms.Lambda(lambda x: x.mul(255))
     ]
     return transforms.Compose(transform_steps)
