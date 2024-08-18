@@ -7,6 +7,7 @@ from PIL import Image
 from torch.utils.data import DataLoader
 from torchvision import transforms, datasets
 import matplotlib.pyplot as plt
+from neural_nets import transform_net
 
 
 def get_training_transformer(img_size: int) -> transforms.Compose:
@@ -15,7 +16,6 @@ def get_training_transformer(img_size: int) -> transforms.Compose:
         transforms.CenterCrop(size=img_size),
         transforms.ToTensor(),
         transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
-        #transforms.Lambda(lambda x: x.mul(255))
     ]
     return transforms.Compose(transform_steps)
 
@@ -36,10 +36,24 @@ def prepare_image(img_path: str, img_size: int = None) -> torch.Tensor:
     img = load_image(img_path=img_path, img_size=img_size)
     transformer = transforms.Compose([
         transforms.ToTensor(),
-        #transforms.Lambda(lambda x: x.mul(255))
         transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
     ])
     return transformer(img)
+
+
+def prepare_frame(frame: np.ndarray, device: torch.device) -> np.ndarray:
+    # NST model je istreniran nad slikama koje su transformisane u tenzore sa vrednostima u
+    # opsegu [0, 1], dok su ucitani frejmovi u opsegu [0, 255]. Takodje, Pillow biblioteka
+    # koja je koriscena za rad sa slikama ucitanu sliku predstavlja kao C x H x W, dok
+    # je frejm predstavljen numpy nizom u formi H x W x C (jer opencv tako funkcionise)
+
+    transform_steps = transforms.Compose([
+        transforms.Lambda(lambda x: x / 255),
+        transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
+    ])
+    frame = torch.permute(torch.from_numpy(frame), (2, 0, 1))
+    transformed_frame = transform_steps(frame)
+    return transformed_frame.unsqueeze(0).to(device)
 
 
 # def normalize_batch(batch):
@@ -63,13 +77,12 @@ def total_variation(img_batch: torch.Tensor) -> float:
             torch.sum(torch.abs(img_batch[:, :, :-1, :] - img_batch[:, :, 1:, :]))) / batch_size
 
 
-def post_process_image(img: np.ndarray) -> np.ndarray:
+def post_process(img: np.ndarray) -> np.ndarray:
     mean = np.array([0.485, 0.456, 0.406]).reshape(-1, 1, 1)
     std = np.array([0.229, 0.224, 0.225]).reshape(-1, 1, 1)
-    dump_img = (img * std) + mean  # de-normalize
-    dump_img = (np.clip(dump_img, 0., 1.) * 255).astype(np.uint8)
-    dump_img = dump_img.transpose(1, 2, 0)
-    return dump_img
+    output_img = (img * std) + mean  # de-normalize
+    output_img = (np.clip(output_img, 0., 1.) * 255).astype(np.uint8)
+    return output_img.transpose(1, 2, 0)
 
 
 def save_image(img: np.ndarray, path: str) -> None:
@@ -104,3 +117,10 @@ def save_training_info(training_args: Dict[str, Union[float, int]], training_tim
 def mkdirs(dirs: Tuple[str, ...]) -> None:
     for dir in dirs:
         os.makedirs(dir, exist_ok=True)
+
+
+def load_model(model_path: str, device: torch.device) -> torch.nn.Module:
+    transformer_net = transform_net.ImageTransformNet()
+    state_dict = torch.load(model_path)
+    transformer_net.load_state_dict(state_dict, strict=True)
+    return transformer_net.to(device).eval()
