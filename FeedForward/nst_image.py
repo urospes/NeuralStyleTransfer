@@ -19,8 +19,9 @@ if __name__ == "__main__":
 
     if TRAINING_MODE:
         STYLE_IMG_NAME = "starry_night.jpg"
-        TRAINING_IMGS = "images/training"
-        DATASET_NAME = "ms_coco_40k"  # promeni dataset po zelji
+        #TRAINING_IMGS = "images/training"
+        TRAINING_IMGS = "videos/training"
+        DATASET_NAME = "dataset"  # promeni dataset po zelji
 
         TRAINING_IMGS_PATH = os.path.join(TRAINING_IMGS, DATASET_NAME)
         STYLE_IMG_PATH = os.path.join(STYLE_IMGS_PATH, STYLE_IMG_NAME)
@@ -47,7 +48,7 @@ if __name__ == "__main__":
 
     else:
         CONTENT_IMAGE_NAME = "norica.jpeg"  # ovim parametrom navodimo koju sliku zelimo da stilizujemo
-        MODEL_NAME = "st_starry_night_tr_ms_coco_40k_1723738077"  # navodimo ime vec istreniranog modela, konfigurisati po zelji
+        MODEL_NAME = "st_mosaic_tr_ms_coco_40k_1723663921"  # navodimo ime vec istreniranog modela, konfigurisati po zelji
 
         OUTPUT_IMG_NAME = f'c_{CONTENT_IMAGE_NAME.split(".")[0]}_m_{MODEL_NAME.split(".")[0]}.jpg'
 

@@ -8,6 +8,9 @@ from torch.utils.data import DataLoader
 from torchvision import transforms, datasets
 import matplotlib.pyplot as plt
 from neural_nets import transform_net
+import utils.VideoDataset as vdset
+import cv2
+from time import time_ns
 
 
 def get_training_transformer(img_size: int) -> transforms.Compose:
@@ -100,7 +103,8 @@ def plot_loss(losses: List[float], path: str, loss_type: str):
 
 
 def save_training_info(training_args: Dict[str, Union[float, int]], training_time: float, total_losses: List[float],
-                       content_losses: List[float], style_losses: List[float], tv_losses: List[float], model_path: str):
+                       content_losses: List[float], style_losses: List[float], tv_losses: List[float],
+                       temp_losses: List[float], model_path: str):
     training_info = {
         **training_args,
         "training_time": training_time
@@ -112,6 +116,7 @@ def save_training_info(training_args: Dict[str, Union[float, int]], training_tim
     plot_loss(losses=content_losses, path=model_path, loss_type="Content Loss")
     plot_loss(losses=style_losses, path=model_path, loss_type="Style Loss")
     plot_loss(losses=tv_losses, path=model_path, loss_type="Total variation Loss")
+    plot_loss(losses=temp_losses, path=model_path, loss_type="Temporal Loss")
 
 
 def mkdirs(dirs: Tuple[str, ...]) -> None:
@@ -124,3 +129,63 @@ def load_model(model_path: str, device: torch.device) -> torch.nn.Module:
     state_dict = torch.load(model_path)
     transformer_net.load_state_dict(state_dict, strict=True)
     return transformer_net.to(device).eval()
+
+
+# --- VIDEO RELATED ---
+
+def get_video_data_loader(video_dir: str, transformer: transforms.Compose, batch_size: int) -> DataLoader:
+    dataset = vdset.VideoDataset(video_dir=video_dir)
+    return DataLoader(dataset=dataset, batch_size=batch_size)
+
+
+def parse_and_save_video_frames(video_path: str, dst_path: str) -> None:
+    frames = []
+
+    v_rd = cv2.VideoCapture(video_path)
+    ret, frame = v_rd.read()
+    while ret:
+        frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+        frames.append(frame)
+        ret, frame = v_rd.read()
+
+    print(f'Successfully parsed {len(frames)} video frames.')
+    print("Saving frames to dataset folder...")
+
+    video_name = video_path.split(os.sep)[-1].split(".")[0]
+    timestamp = time_ns()
+    for i, frame in enumerate(frames):
+        frame_img = Image.fromarray(frame)
+        frame_img.save(os.path.join(dst_path, f'{timestamp + i}_{video_name}_frame_{i}.png'))
+
+
+def prepare_video_dataset(videos_folder_path: str, dst_path: str) -> None:
+    os.makedirs(dst_path, exist_ok=True)
+    videos_list = os.listdir(videos_folder_path)
+    for video in videos_list:
+        if not os.path.isfile(os.path.join(videos_folder_path, video)):
+            continue
+        print(f'\n\nParsing video: {video}\n')
+        parse_and_save_video_frames(video_path=os.path.join(videos_folder_path, video),
+                                    dst_path=dst_path)
+    print(f'Parsing successful.\nTotal number of frames parsed: {len(os.listdir(dst_path))}')
+
+
+def next_and_prev_warped(deepflow, prev_frame, next_frame):
+    prev_frame = cv2.cvtColor(prev_frame.cpu().detach().numpy().transpose(1, 2, 0), cv2.COLOR_RGB2GRAY)
+    next_frame = cv2.cvtColor(next_frame.cpu().detach().numpy().transpose(1, 2, 0), cv2.COLOR_RGB2GRAY)
+    opt_flow = deepflow.calc(prev_frame, next_frame, None)
+
+    h, w = prev_frame.shape[:2]
+    grid_x, grid_y = np.meshgrid(np.arange(w), np.arange(h))
+    flow_x = opt_flow[..., 0]
+    flow_y = opt_flow[..., 1]
+
+    # Compute the new pixel coordinates by adding the flow to the original coordinates
+    map_x = grid_x + flow_x
+    map_y = grid_y + flow_y
+
+    # Warp the previous frame to the new coordinates using cv2.remap
+    warped_frame = cv2.remap(prev_frame, map_x.astype(np.float32), map_y.astype(np.float32),
+                             interpolation=cv2.INTER_LINEAR)
+
+    return torch.from_numpy(next_frame), torch.from_numpy(warped_frame)
