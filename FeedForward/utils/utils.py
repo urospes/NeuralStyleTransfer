@@ -170,22 +170,36 @@ def prepare_video_dataset(videos_folder_path: str, dst_path: str) -> None:
     print(f'Parsing successful.\nTotal number of frames parsed: {len(os.listdir(dst_path))}')
 
 
-def next_and_prev_warped(deepflow, prev_frame, next_frame):
+def compute_opt_flow(deepflow, prev_frame, next_frame):
     prev_frame = cv2.cvtColor(prev_frame.cpu().detach().numpy().transpose(1, 2, 0), cv2.COLOR_RGB2GRAY)
     next_frame = cv2.cvtColor(next_frame.cpu().detach().numpy().transpose(1, 2, 0), cv2.COLOR_RGB2GRAY)
+
     opt_flow = deepflow.calc(prev_frame, next_frame, None)
+    return torch.from_numpy(opt_flow)
 
-    h, w = prev_frame.shape[:2]
-    grid_x, grid_y = np.meshgrid(np.arange(w), np.arange(h))
-    flow_x = opt_flow[..., 0]
-    flow_y = opt_flow[..., 1]
 
-    # Compute the new pixel coordinates by adding the flow to the original coordinates
-    map_x = grid_x + flow_x
-    map_y = grid_y + flow_y
+def forward_warp(frame, opt_flow):
+    C, H, W = frame.size()
 
-    # Warp the previous frame to the new coordinates using cv2.remap
-    warped_frame = cv2.remap(prev_frame, map_x.astype(np.float32), map_y.astype(np.float32),
-                             interpolation=cv2.INTER_LINEAR)
+    # Create a mesh grid of pixel coordinates (normalized to [-1, 1])
+    grid_y, grid_x = torch.meshgrid(torch.linspace(-1, 1, H), torch.linspace(-1, 1, W), indexing='ij')
+    grid = torch.stack((grid_x, grid_y), dim=-1).unsqueeze(0).to(frame.device)  # (1, H, W, 2)
 
-    return torch.from_numpy(next_frame), torch.from_numpy(warped_frame)
+    flow_normalized = torch.zeros_like(opt_flow)
+    flow_normalized[..., 0] = opt_flow[..., 0] / ((W - 1) / 2)  # Normalize dx (width)
+    flow_normalized[..., 1] = opt_flow[..., 1] / ((H - 1) / 2)  # Normalize dy (height)
+
+    # Add the optical flow to the base grid to create a flow-based sampling grid
+    flow_grid = grid + flow_normalized  # Shape: (H, W, 2)
+
+    # Reshape frame for grid_sample (add batch dimension and permute to match expected input)
+    frame = frame.unsqueeze(0)  # Shape: (1, C, H, W)
+
+    # Perform the warping using grid_sample
+    warped_frame = torch.nn.functional.grid_sample(frame, flow_grid, mode='bilinear')
+
+    # Remove the batch dimension
+    warped_frame = warped_frame.squeeze(0)  # Shape: (C, H, W)
+
+    return warped_frame
+

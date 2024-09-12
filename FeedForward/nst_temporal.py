@@ -1,26 +1,30 @@
 import os
 import math
 import time
+
+import cv2
 import torch
+import torchvision
+from PIL import Image
+
 from utils import utils, train
 
 
 if __name__ == "__main__":
 
-    #VIDEOS_PATH = "videos/training"
-    #VIDEOS_FRAMES_DATASET = os.path.join(VIDEOS_PATH, "dataset", "frames")
+    VIDEOS_PATH = "videos/training"
+    VIDEOS_FRAMES_DATASET = os.path.join(VIDEOS_PATH, "dataset", "frames")
 
-    #utils.prepare_video_dataset(videos_folder_path=VIDEOS_PATH, dst_path=VIDEOS_FRAMES_DATASET)
+    #utils.prepare_video_dataset(videos_folder_path="videos/training/addition", dst_path=VIDEOS_FRAMES_DATASET)
 
     STYLE_IMGS_PATH = "images/style_images"
-    STYLE_IMG_NAME = "candy.jpg"
-    TRAINING_IMGS = "videos/training"
+    STYLE_IMG_NAME = "starry_night.jpg"
     DATASET_NAME = "dataset"  # promeni dataset po zelji
 
     MODELS_PATH = "models"
     utils.mkdirs(dirs=(STYLE_IMGS_PATH, MODELS_PATH))
 
-    TRAINING_IMGS_PATH = os.path.join(TRAINING_IMGS, DATASET_NAME)
+    TRAINING_IMGS_PATH = os.path.join(VIDEOS_PATH, DATASET_NAME)
     STYLE_IMG_PATH = os.path.join(STYLE_IMGS_PATH, STYLE_IMG_NAME)
 
     TRAINING_ARGS = {
@@ -28,9 +32,9 @@ if __name__ == "__main__":
         "batch_size": 4,
         "epochs": 2,
         "content_w": 1e0,
-        "style_w": 5e4,
+        "style_w": 4e4,
         "tv_w": 0,
-        "temp_w": 5e3
+        "temp_w": 1e1
     }
 
     IMG_SIZE = 256
@@ -43,4 +47,4 @@ if __name__ == "__main__":
     print(device)
 
     train.train(training_imgs_path=TRAINING_IMGS_PATH, style_image_path=STYLE_IMG_PATH,
-                training_args=TRAINING_ARGS, img_size=IMG_SIZE, model_path=MODEL_PATH, device=device, use_temporal_loss=True)
+               training_args=TRAINING_ARGS, img_size=IMG_SIZE, model_path=MODEL_PATH, device=device, use_temporal_loss=True)

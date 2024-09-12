@@ -12,7 +12,7 @@ if __name__ == "__main__":
     MODELS_PATH = "models"
     VIDEOS_PATH = "videos"
 
-    MODEL_NAME = "st_candy_tr_dataset_1724956728"
+    MODEL_NAME = "st_starry_night_tr_dataset_1725608079"
     MODEL_PATH = os.path.join(MODELS_PATH, MODEL_NAME, "params.pth")
 
     VIDEO_NAME = "lions"    # staviti ime foldera u kome se nalazi zeljeni video

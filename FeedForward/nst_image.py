@@ -48,7 +48,7 @@ if __name__ == "__main__":
 
     else:
         CONTENT_IMAGE_NAME = "norica.jpeg"  # ovim parametrom navodimo koju sliku zelimo da stilizujemo
-        MODEL_NAME = "st_mosaic_tr_ms_coco_40k_1723663921"  # navodimo ime vec istreniranog modela, konfigurisati po zelji
+        MODEL_NAME = "st_starry_night_tr_dataset_1725224584"  # navodimo ime vec istreniranog modela, konfigurisati po zelji
 
         OUTPUT_IMG_NAME = f'c_{CONTENT_IMAGE_NAME.split(".")[0]}_m_{MODEL_NAME.split(".")[0]}.jpg'
 

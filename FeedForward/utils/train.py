@@ -48,12 +48,12 @@ def train(training_imgs_path: str, style_image_path: str, img_size: int, trainin
             if use_temporal_loss:
                 temp_loss = 0
                 for k in range(batch.shape[0] - 1):
-                    prev_frame = stylized_batch[k]
-                    next_frame = stylized_batch[k + 1]
-                    f_t, f_t1_w = utils.next_and_prev_warped(deep_flow, prev_frame, next_frame)
-                    temp_loss += torch.nn.MSELoss()(f_t, f_t1_w)
+                    prev_frame_raw = batch[k]
+                    next_frame_raw = batch[k + 1]
+                    opt_flow = utils.compute_opt_flow(deep_flow, prev_frame_raw, next_frame_raw)
+                    warped_frame = utils.forward_warp(stylized_batch[k], opt_flow.to(device))
+                    temp_loss += torch.nn.MSELoss()(warped_frame, stylized_batch[k + 1])
                 temp_loss *= training_args["temp_w"] * temp_loss
-                temporal_losses.append(temp_loss)
 
             features_batch = loss_net(batch)
             features_stylized_batch = loss_net(stylized_batch)
@@ -68,7 +68,7 @@ def train(training_imgs_path: str, style_image_path: str, img_size: int, trainin
 
             tv_loss = training_args["tv_w"] * utils.total_variation(stylized_batch)
 
-            total_loss = 0#content_loss + style_loss + tv_loss
+            total_loss = content_loss + style_loss + tv_loss
             if use_temporal_loss:
                 total_loss += temp_loss
             total_loss.backward()
@@ -85,7 +85,8 @@ def train(training_imgs_path: str, style_image_path: str, img_size: int, trainin
             content_losses.append(content_loss.item())
             style_losses.append(style_loss.item())
             tv_losses.append(tv_loss.item())
-            temporal_losses.append(temp_loss.item())
+            if use_temporal_loss:
+                temporal_losses.append(temp_loss.item())
 
             if batch_id % 20 == 0:
                 print(f'Batch {batch_id}')
@@ -98,8 +99,3 @@ def train(training_imgs_path: str, style_image_path: str, img_size: int, trainin
     utils.save_training_info(training_args=training_args, training_time=end-start, total_losses=total_losses,
                              content_losses=content_losses, style_losses=style_losses, tv_losses=tv_losses,
                              temp_losses=temporal_losses, model_path=model_path)
-
-def train_video(video_dataset_dir: str):
-    data_loader = utils.get_video_data_loader(video_dir=video_dataset_dir, transformer=None, batch_size=2)
-    for i, batch in enumerate(data_loader):
-        a = batch

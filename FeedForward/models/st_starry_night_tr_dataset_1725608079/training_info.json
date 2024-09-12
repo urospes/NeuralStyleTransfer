@@ -1,0 +1,1 @@
+{"learning_rate": 0.0003, "batch_size": 4, "epochs": 2, "content_w": 1.0, "style_w": 40000.0, "tv_w": 0, "temp_w": 10.0, "training_time": 3564.6568274497986}
